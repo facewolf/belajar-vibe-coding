@@ -1,89 +1,76 @@
-# Fitur Login User
+# Fitur Get Current User
 
-Dokumen ini berisi panduan teknis (planning) untuk mengimplementasikan fitur login pengguna. Panduan ini dirancang untuk diikuti langkah demi langkah oleh programmer junior atau model AI agent.
-
-## Spesifikasi Database
-
-Tambahkan definisi tabel baru yaitu `sessions` ke dalam file schema Drizzle (misalnya di `src/db/schema.ts`). Struktur kolomnya adalah sebagai berikut:
-
-*   `id`: integer, auto increment, primary key
-*   `token`: varchar(255), not null (nanti akan diisi dengan UUID sebagai token sesi user)
-*   `user_id`: integer, foreign key yang merujuk pada kolom `id` di tabel `users`
-*   `created_at`: timestamp, default current_timestamp
-
-Setelah menambahkan schema `sessions`, pastikan tabel ini diaplikasikan ke database MySQL melalui proses migrasi yang biasa digunakan di project ini (menggunakan Drizzle Kit).
+Dokumen ini berisi panduan teknis (planning) untuk mengimplementasikan fitur pengambilan data user yang sedang login saat ini (Get Current User). Panduan ini dirancang untuk diikuti langkah demi langkah oleh programmer junior atau model AI agent.
 
 ## Spesifikasi API
 
-Buat endpoint API untuk menangani proses otentikasi login.
+Buat endpoint API untuk mendapatkan data profil user berdasarkan token otentikasi.
 
-*   **Endpoint**: `POST /api/users/login`
+*   **Endpoint**: `GET /api/users/current`
 
-**Request Body:**
+**Request Headers:**
 
-```json
-{
-    "email": "admin@localhost",
-    "password": "rahasia"
-}
-```
+*   `Authorization`: `Bearer <token>`
+    *(Keterangan: `<token>` adalah token UUID yang dikembalikan saat proses login dan tersimpan di tabel `sessions`. Token ini terhubung dengan pengguna di tabel `users`)*
 
 **Response Body (Success):**
 
 ```json
 {
-    "data": "token_uuid_string_disini"
+    "data": {
+        "id": 1,
+        "name": "admin",
+        "email": "admin@localhost",
+        "created_at": "timestamp"
+    }
 }
 ```
+*(Catatan: Jangan pernah mengembalikan field `password` di dalam payload response untuk alasan keamanan)*
 
-**Response Body (Error - Email/Password Salah):**
+**Response Body (Error - Jika Token Tidak Valid / Tidak Ada):**
 
 ```json
 {
-    "error": "Email atau password salah"
+    "error": "Unauthorized"
 }
 ```
 
 ## Standar Struktur Folder dan File
 
-Pekerjaan ini tidak membuat file baru, melainkan akan memodifikasi struktur file yang sudah ada:
+Pekerjaan ini tidak membuat file baru, melainkan hanya akan memodifikasi file yang sudah ada:
 
-1.  **Folder `src/routes`**: Tambahkan route baru di dalam file `users-route.ts`.
-2.  **Folder `src/services`**: Tambahkan fungsi bisnis baru di dalam file `users-service.ts`.
+1.  **Folder `src/routes`**: Tambahkan definisi route baru di dalam file `users-route.ts`.
+2.  **Folder `src/services`**: Tambahkan fungsi logika bisnis baru di dalam file `users-service.ts`.
 
 ## Tahapan Implementasi
 
 Ikuti tahapan berikut secara berurutan:
 
-1.  **Update Schema Database**
-    *   Buka file `src/db/schema.ts`.
-    *   Definisikan tabel `sessions` menggunakan sintaks Drizzle ORM.
-    *   Gunakan fungsi referensi Drizzle untuk menambahkan relasi *Foreign Key* dari `sessions.user_id` ke tabel `users.id` (contoh: `references(() => users.id)`).
-
-2.  **Sinkronisasi / Migrasi Database**
-    *   Jalankan perintah sinkronisasi Drizzle (misalnya `bunx drizzle-kit push`) untuk menerapkan pembuatan tabel `sessions` secara langsung ke database MySQL Anda.
-
-3.  **Implementasi Business Logic (Service)**
+1.  **Implementasi Business Logic (Service)**
     *   Buka file `src/services/users-service.ts`.
-    *   Tambahkan fungsi baru, misalnya `login(payload)`.
+    *   Tambahkan fungsi baru, misalnya `getCurrentUser(token: string)`.
     *   **Langkah Logika**:
-        1. Lakukan query (select) ke tabel `users` berdasarkan input `email`.
-        2. Jika user tidak ditemukan, lempar (*throw*) error atau *return* dengan pesan "Email atau password salah". (Hindari memberitahu spesifik bahwa email tidak ada).
-        3. Jika user ditemukan, verifikasi password-nya menggunakan utilitas Bun: `await Bun.password.verify(inputPassword, hashedPasswordDariDB)`.
-        4. Jika verifikasi gagal, *throw* error "Email atau password salah".
-        5. Jika verifikasi berhasil, buatlah token UUID baru (Anda bisa menggunakan fitur native JavaScript `crypto.randomUUID()`).
-        6. Lakukan insert data sesi baru ke tabel `sessions` yang berisi `token` dan `user_id`.
-        7. Kembalikan response sukses berformat `{"data": "isi_tokennya_disini"}`.
+        1. Lakukan query (select) ke tabel `sessions` berdasarkan nilai `token` menggunakan Drizzle ORM.
+        2. Karena Anda memerlukan data profil penggunanya, lakukan operasi *Join* tabel (atau bisa juga query terpisah ke tabel `users` berdasarkan `user_id` yang didapat dari tabel `sessions`).
+        3. Jika token tidak ditemukan di database, atau user-nya tidak ada, lempar (*throw*) error atau *return* dengan pesan "Unauthorized".
+        4. Jika data berhasil ditemukan, rangkai objek kembalian yang memuat id, name, email, dan created_at. **Pastikan field password dibuang/tidak disertakan**.
+        5. Kembalikan response sukses dengan format `{"data": { ... }}`.
 
-4.  **Implementasi Routing (Route)**
+2.  **Implementasi Routing (Route)**
     *   Buka file `src/routes/users-route.ts`.
-    *   Tambahkan metode `.post("/login", ...)` di dalam instance Elysia `usersRoute` yang sudah ada.
-    *   Lakukan validasi body request (gunakan `t.Object` dari Elysia) untuk memastikan field `email` dan `password` bertipe string dan wajib dikirim.
-    *   Di dalam handler endpoint, panggil fungsi `login` dari `users-service.ts` dan teruskan data body-nya.
-    *   Lakukan *Error Handling*: Tangkap error jika terjadi kesalahan (khususnya untuk pesan "Email atau password salah") dan kembalikan response error tersebut dengan format JSON `{"error": "Email atau password salah"}` menggunakan HTTP Status Code `401 Unauthorized`. Jika sukses, teruskan response balikan dari service.
+    *   Tambahkan *handler* baru menggunakan metode `.get("/current", ...)` di dalam instance Elysia `usersRoute`.
+    *   Di dalam fungsi *handler*, akses object request headers (biasanya tersedia dari object context: `headers`).
+    *   Ekstrak token dari header `Authorization`:
+        *   Jika header kosong atau formatnya salah (tidak diawali "Bearer "), lempar error "Unauthorized".
+        *   Jika ada, parsing string tersebut untuk mendapatkan teks murni dari `<token>`-nya (hilangkan kata "Bearer ").
+    *   Panggil fungsi `getCurrentUser` dari `users-service.ts` dan lemparkan nilai token tersebut.
+    *   Lakukan *Error Handling*: Tangkap error jika operasi gagal dan kembalikan *error response* berformat JSON `{"error": "Unauthorized"}` disertai HTTP Status Code `401 Unauthorized`.
+    *   Jika operasi berhasil, kembalikan response datanya secara langsung.
 
-5.  **Pengujian**
-    *   Pastikan server development berjalan (`bun run dev`).
-    *   Gunakan HTTP Client (Postman/cURL/Insomnia) untuk mengirim request `POST http://localhost:3000/api/users/login`.
-    *   Uji menggunakan kredensial yang salah dan pastikan mendapat *error response* yang tepat.
-    *   Uji menggunakan kredensial yang benar (gunakan data user yang dibuat dari fitur registrasi sebelumnya), pastikan menerima response data token, lalu cek tabel `sessions` di database untuk memastikan token dan user_id terkait berhasil disimpan.
+3.  **Pengujian**
+    *   Jalankan server aplikasi di mode development (`bun run dev`).
+    *   Gunakan HTTP Client (Postman/cURL/Insomnia).
+    *   Lakukan uji coba mengakses `GET http://localhost:3000/api/users/current` **tanpa** memberikan header `Authorization`. Pastikan responnya adalah error `401 Unauthorized`.
+    *   Uji kembali endpoint dengan memberikan header token fiktif (`Authorization: Bearer token_asal_asalan`). Pastikan responnya tetap `401 Unauthorized`.
+    *   Lakukan request login di endpoint `POST /api/users/login` untuk mendapatkan token asli.
+    *   Gunakan token asli tersebut pada header request `Authorization: Bearer <token_asli>`, lalu tembak endpoint `GET /api/users/current`. Verifikasi bahwa balikan mengembalikan data profil user dengan lengkap namun tanpa password.
