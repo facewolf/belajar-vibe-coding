@@ -65,4 +65,28 @@ export const usersService = {
 
     return { data: token };
   },
+
+  async getCurrentUser(token: string) {
+    // 1. Cari session beserta data usernya menggunakan join
+    const sessionRecord = await db
+      .select({
+        user: {
+          id: users.id,
+          name: users.name,
+          email: users.email,
+          createdAt: users.createdAt,
+        },
+      })
+      .from(sessions)
+      .innerJoin(users, eq(sessions.userId, users.id))
+      .where(eq(sessions.token, token))
+      .limit(1);
+
+    if (sessionRecord.length === 0) {
+      throw new Error("Unauthorized");
+    }
+
+    // Mengembalikan data user tanpa password
+    return { data: sessionRecord[0].user };
+  },
 };
