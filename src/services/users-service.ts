@@ -89,4 +89,11 @@ export const usersService = {
     // Mengembalikan data user tanpa password
     return { data: sessionRecord[0].user };
   },
+
+  async logoutUser(token: string) {
+    // 1. Hapus session berdasarkan token
+    await db.delete(sessions).where(eq(sessions.token, token));
+
+    return { data: "OK" };
+  },
 };
