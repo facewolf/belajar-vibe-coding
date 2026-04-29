@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { db } from "./db";
 import { users } from "./db/schema";
+import { usersRoute } from "./routes/users-route";
 
 const app = new Elysia()
   .get("/", () => "Hello Elysia with Bun!")
@@ -12,6 +13,7 @@ const app = new Elysia()
       return { error: "Failed to fetch users. Is MySQL running?", details: error };
     }
   })
+  .use(usersRoute)
   .listen(3000);
 
 console.log(
