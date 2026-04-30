@@ -2,7 +2,25 @@ import { db } from "../db";
 import { users, sessions } from "../db/schema";
 import { eq } from "drizzle-orm";
 
+/**
+ * Service untuk menangani logic bisnis terkait user.
+ * Berisi fungsi-fungsi untuk operasi CRUD user dan session.
+ */
 export const usersService = {
+
+  /**
+   * Mendaftarkan user baru ke database.
+   * 
+   * Fungsi ini melakukan:
+   * 1. Validasi panjang input (name dan email maks 255 karakter)
+   * 2. Pengecekan apakah email sudah terdaftar
+   * 3. Hash password menggunakan bcrypt dengan cost 10
+   * 4. Penyimpanan data user baru ke database
+   * 
+   * @param payload - Object berisi name, email, dan password user
+   * @returns Object dengan format { data: "OK" } jika berhasil
+   * @throws Error jika email sudah terdaftar atau input terlalu panjang
+   */
   async register(payload: any) {
     const { name, email, password } = payload;
 
@@ -42,6 +60,19 @@ export const usersService = {
     return { data: "OK" };
   },
 
+  /**
+   * Melakukan autentikasi user dan membuat session baru.
+   * 
+   * Fungsi ini melakukan:
+   * 1. Pengecekan apakah email ada di database
+   * 2. Verifikasi password dengan bcrypt
+   * 3. Generate UUID token untuk session
+   * 4. Penyimpanan session ke database
+   * 
+   * @param payload - Object berisi email dan password user
+   * @returns Object dengan format { data: "<token>" } jika berhasil login
+   * @throws Error jika email/password salah
+   */
   async login(payload: any) {
     const { email, password } = payload;
 
@@ -75,6 +106,17 @@ export const usersService = {
     return { data: token };
   },
 
+  /**
+   * Mengambil data user yang sedang login berdasarkan token session.
+   * 
+   * Fungsi ini melakukan:
+   * 1. Pencarian session berdasarkan token menggunakan join dengan tabel users
+   * 2. Pengembalian data user (tanpa password) jika session valid
+   * 
+   * @param token - UUID token dari header Authorization
+   * @returns Object dengan format { data: { id, name, email, createdAt } }
+   * @throws Error jika token tidak valid atau session tidak ditemukan
+   */
   async getCurrentUser(token: string) {
     // 1. Cari session beserta data usernya menggunakan join
     const sessionRecord = await db
@@ -99,6 +141,15 @@ export const usersService = {
     return { data: sessionRecord[0].user };
   },
 
+  /**
+   * Melakukan logout dengan menghapus session dari database.
+   * 
+   * Fungsi ini melakukan:
+   * 1. Penghapusan record session berdasarkan token
+   * 
+   * @param token - UUID token dari header Authorization
+   * @returns Object dengan format { data: "OK" }
+   */
   async logoutUser(token: string) {
     // 1. Hapus session berdasarkan token
     await db.delete(sessions).where(eq(sessions.token, token));
