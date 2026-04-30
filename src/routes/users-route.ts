@@ -10,9 +10,18 @@ export const usersRoute = new Elysia({ prefix: "/api/users" })
         return result;
       } catch (error: any) {
         set.status = 400;
+
+        // Handle validation errors
+        if (error.message.includes("tidak boleh lebih dari")) {
+          return { error: error.message };
+        }
+
+        // Handle duplicate email
         if (error.message === "Email sudah terdaftar") {
           return { error: error.message };
         }
+
+        // Generic error
         return { error: "Internal Server Error", details: error.message };
       }
     },

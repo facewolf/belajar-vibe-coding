@@ -6,6 +6,15 @@ export const usersService = {
   async register(payload: any) {
     const { name, email, password } = payload;
 
+    // Validasi panjang input
+    if (name && name.length > 255) {
+      throw new Error("Nama tidak boleh lebih dari 255 karakter");
+    }
+
+    if (email && email.length > 255) {
+      throw new Error("Email tidak boleh lebih dari 255 karakter");
+    }
+
     // 1. Cek apakah email sudah ada
     const existingUser = await db
       .select()
